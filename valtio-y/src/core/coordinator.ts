@@ -3,13 +3,19 @@ import {
   SynchronizationState,
   type AnySharedType,
 } from "./synchronization-state";
-import { createLogger, type Logger } from "./logger";
+import { createLogger, type Logger, type LogLevel } from "./logger";
 import {
   WriteScheduler,
   type ApplyFunctions,
 } from "../scheduling/write-scheduler";
 import { applyMapDeletes, applyMapSets } from "../scheduling/map-apply";
 import { applyArrayOperations } from "../scheduling/array-apply";
+import {
+  reconcileValtioArray,
+  reconcileValtioMap,
+} from "../reconcile/reconciler";
+import { getYDoc } from "./types";
+import type { PostTransactionQueue } from "../scheduling/post-transaction-queue";
 
 /**
  * Orchestrates all valtio-y components using dependency injection.
@@ -36,10 +42,10 @@ export class ValtioYjsCoordinator {
   // Internal components
   private readonly scheduler: WriteScheduler;
 
-  constructor(doc: Y.Doc, debug?: boolean, trace?: boolean) {
+  constructor(doc: Y.Doc, logLevel?: LogLevel) {
     // Create pure components with no dependencies
     this.state = new SynchronizationState();
-    this.logger = createLogger(debug ?? false, trace ?? false);
+    this.logger = createLogger(logLevel ?? "off");
 
     // Wire up apply functions with proper dependencies via closures
     // This eliminates the need for setter injection
@@ -66,12 +72,7 @@ export class ValtioYjsCoordinator {
 
     // Create scheduler with all dependencies (constructor injection)
     // No setter injection needed - fully initialized immediately
-    this.scheduler = new WriteScheduler(
-      doc,
-      this.logger,
-      applyFunctions,
-      trace ?? false,
-    );
+    this.scheduler = new WriteScheduler(doc, this.logger, applyFunctions);
   }
 
   // ===== Coordination Methods =====
@@ -133,6 +134,10 @@ export class ValtioYjsCoordinator {
     this.state.registerSubscription(yType, unsubscribe);
   }
 
+  unregisterSubscription(yType: AnySharedType): void {
+    this.state.unregisterSubscription(yType);
+  }
+
   registerDisposable(dispose: () => void): void {
     this.state.registerDisposable(dispose);
   }
@@ -153,5 +158,35 @@ export class ValtioYjsCoordinator {
 
   shouldSkipArrayStructuralReconcile(arr: Y.Array<unknown>): boolean {
     return this.state.shouldSkipArrayStructuralReconcile(arr);
+  }
+
+  requestMapStructuralFinalize(
+    yMap: Y.Map<unknown>,
+    queue: PostTransactionQueue,
+    withReconcilingLock: (fn: () => void) => void,
+  ): void {
+    const doc = getYDoc(yMap);
+    if (!doc) return;
+    this.logger.trace("[coordinator] schedule map finalize", {
+      keys: Array.from(yMap.keys()),
+    });
+    queue.enqueue(() =>
+      reconcileValtioMap(this, yMap, doc, withReconcilingLock),
+    );
+  }
+
+  requestArrayStructuralFinalize(
+    yArray: Y.Array<unknown>,
+    queue: PostTransactionQueue,
+    withReconcilingLock: (fn: () => void) => void,
+  ): void {
+    const doc = getYDoc(yArray);
+    if (!doc) return;
+    this.logger.trace("[coordinator] schedule array finalize", {
+      length: yArray.length,
+    });
+    queue.enqueue(() =>
+      reconcileValtioArray(this, yArray, doc, withReconcilingLock),
+    );
   }
 }

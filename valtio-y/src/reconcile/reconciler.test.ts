@@ -5,6 +5,7 @@ import {
   reconcileValtioMap,
   reconcileValtioArray,
   reconcileValtioArrayWithDelta,
+  findRemovedControllers,
 } from "./reconciler";
 import { ValtioYjsCoordinator } from "../core/coordinator";
 
@@ -21,7 +22,7 @@ describe("Reconciler: map/array/delta", () => {
     yMap.set("b", 2);
 
     // Force reconcile
-    const coordinator = new ValtioYjsCoordinator(doc, true);
+    const coordinator = new ValtioYjsCoordinator(doc, "debug");
     // Ensure reconciler can find the existing proxy instance
     // We reuse the controller created by createYjsProxy by linking caches
     coordinator.state.yTypeToValtioProxy.set(yMap, proxy);
@@ -55,7 +56,7 @@ describe("Reconciler: map/array/delta", () => {
       getRoot: (d) => d.getArray("arr"),
     });
 
-    const coordinator = new ValtioYjsCoordinator(doc, true);
+    const coordinator = new ValtioYjsCoordinator(doc, "debug");
     coordinator.state.yTypeToValtioProxy.set(yArr, proxy);
     coordinator.state.valtioProxyToYType.set(proxy, yArr);
 
@@ -75,7 +76,7 @@ describe("Reconciler: map/array/delta", () => {
       getRoot: (d) => d.getArray("arr"),
     });
 
-    const coordinator = new ValtioYjsCoordinator(doc, true);
+    const coordinator = new ValtioYjsCoordinator(doc, "debug");
     coordinator.state.yTypeToValtioProxy.set(yArr, proxy);
     coordinator.state.valtioProxyToYType.set(proxy, yArr);
 
@@ -94,7 +95,7 @@ describe("Reconciler: map/array/delta", () => {
       getRoot: (d) => d.getMap("root"),
     });
 
-    const coordinator = new ValtioYjsCoordinator(doc, true);
+    const coordinator = new ValtioYjsCoordinator(doc, "debug");
     coordinator.state.yTypeToValtioProxy.set(yRoot, proxy);
     coordinator.state.valtioProxyToYType.set(proxy, yRoot);
 
@@ -129,7 +130,7 @@ describe("Reconciler: map/array/delta", () => {
     level2.set("child", level3);
     yRoot.set("parent", level2);
 
-    const coordinator = new ValtioYjsCoordinator(doc, true);
+    const coordinator = new ValtioYjsCoordinator(doc, "debug");
     coordinator.state.yTypeToValtioProxy.set(yRoot, proxy);
     coordinator.state.valtioProxyToYType.set(proxy, yRoot);
 
@@ -166,7 +167,7 @@ describe("Reconciler: map/array/delta", () => {
       getRoot: (d) => d.getArray("arr"),
     });
 
-    const coordinator = new ValtioYjsCoordinator(doc, true);
+    const coordinator = new ValtioYjsCoordinator(doc, "debug");
     coordinator.state.yTypeToValtioProxy.set(yArr, proxy);
     coordinator.state.valtioProxyToYType.set(proxy, yArr);
 
@@ -181,5 +182,107 @@ describe("Reconciler: map/array/delta", () => {
       coordinator.withReconcilingLock(fn),
     );
     expect(proxy).toEqual([1, 9, 2, 3]);
+  });
+});
+
+describe("findRemovedControllers", () => {
+  it("returns empty array when oldItems is empty", () => {
+    const result = findRemovedControllers([], [{ a: 1 }]);
+    expect(result).toEqual([]);
+  });
+
+  it("returns empty array when no objects in oldItems", () => {
+    const result = findRemovedControllers([1, 2, "foo", null], [3, 4]);
+    expect(result).toEqual([]);
+  });
+
+  it("identifies single removed object", () => {
+    const objA = { id: "A" };
+    const objB = { id: "B" };
+    const result = findRemovedControllers([objA, objB], [objA]);
+    expect(result).toEqual([objB]);
+  });
+
+  it("handles duplicates correctly - same object appears multiple times", () => {
+    const objA = { id: "A" };
+    const objB = { id: "B" };
+    // old: [A, A, B], new: [A, C] -> one A and B were removed
+    const result = findRemovedControllers([objA, objA, objB], [objA]);
+    expect(result).toEqual([objA, objB]);
+  });
+
+  it("handles multiple duplicates with partial retention", () => {
+    const objA = { id: "A" };
+    const objB = { id: "B" };
+    // old: [A, A, A, B], new: [A, A] -> one A and B removed
+    const result = findRemovedControllers(
+      [objA, objA, objA, objB],
+      [objA, objA],
+    );
+    expect(result).toEqual([objA, objB]);
+  });
+
+  it("returns all objects when newItems is empty", () => {
+    const objA = { id: "A" };
+    const objB = { id: "B" };
+    const result = findRemovedControllers([objA, objB], []);
+    expect(result).toEqual([objA, objB]);
+  });
+
+  it("returns empty array when all objects are retained", () => {
+    const objA = { id: "A" };
+    const objB = { id: "B" };
+    const result = findRemovedControllers([objA, objB], [objA, objB]);
+    expect(result).toEqual([]);
+  });
+
+  it("filters out primitives and only tracks objects", () => {
+    const objA = { id: "A" };
+    const objB = { id: "B" };
+    // Primitives don't need cleanup, only objects
+    const result = findRemovedControllers(
+      [1, "foo", objA, null, objB, undefined],
+      [objA, 2, "bar"],
+    );
+    expect(result).toEqual([objB]);
+  });
+
+  it("handles null and undefined in arrays gracefully", () => {
+    const objA = { id: "A" };
+    const result = findRemovedControllers(
+      [null, objA, undefined],
+      [null, undefined],
+    );
+    expect(result).toEqual([objA]);
+  });
+
+  it("preserves order of removed objects", () => {
+    const objA = { id: "A" };
+    const objB = { id: "B" };
+    const objC = { id: "C" };
+    const result = findRemovedControllers([objA, objB, objC], [objB]);
+    expect(result).toEqual([objA, objC]);
+  });
+
+  it("handles mixed scenario with duplicates, primitives, and removals", () => {
+    const objA = { id: "A" };
+    const objB = { id: "B" };
+    const objC = { id: "C" };
+    // old: [1, A, A, "foo", B, null, C, 2]
+    // new: [A, 3, B, B, "bar"]
+    // removed: one A, C (B appears twice in new, so both B instances retained)
+    const result = findRemovedControllers(
+      [1, objA, objA, "foo", objB, null, objC, 2],
+      [objA, 3, objB, objB, "bar"],
+    );
+    expect(result).toEqual([objA, objC]);
+  });
+
+  it("example from docstring: old=[A, A, B], new=[A, C] → returns [A, B]", () => {
+    const objA = { id: "A" };
+    const objB = { id: "B" };
+    const objC = { id: "C" };
+    const result = findRemovedControllers([objA, objA, objB], [objA, objC]);
+    expect(result).toEqual([objA, objB]);
   });
 });
