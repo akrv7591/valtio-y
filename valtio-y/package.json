@@ -1,9 +1,9 @@
 {
   "name": "valtio-y",
   "description": "Collaborative Valtio state",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
-  "author": "Daishi Kato, Alex Gogl",
+  "author": "Alex Gogl",
   "repository": {
     "type": "git",
     "url": "https://github.com/valtiojs/valtio-y.git"
