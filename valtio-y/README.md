@@ -37,7 +37,7 @@ const ydoc = new Y.Doc();
 
 // Create a synchronized proxy
 const { proxy: state } = createYjsProxy(ydoc, {
-  getRoot: (doc) => doc.getMap("mymap"),
+  getRoot: (doc) => doc.getMap("root"),
 });
 
 // Mutate state like a normal object
@@ -68,7 +68,7 @@ Live collaborative demos - open in multiple tabs to see real-time sync:
 
 4. **[Todos App](https://valtio-y-todos.agcty.workers.dev)** - Live collaborative todo app demo.
 
-5. **[Minecraft Clone](https://stackblitz.com/github/valtiojs/valtio-y/tree/main/examples/03_minecraft)** - Real-time multiplayer 3D game with WebRTC P2P sync (Three.js, y-webrtc).
+5. **[Minecraft Clone](https://valtio-y-minecraft.agcty.workers.dev)** - Real-time multiplayer 3D game with Cloudflare Durable Objects sync (Three.js, valtio-y).
 
 ## Collaboration Setup
 
@@ -172,6 +172,15 @@ function TodoList() {
 ```
 
 valtio-y works with any framework that Valtio supports: React, Vue, Svelte, Solid, and vanilla JavaScript.
+
+**Note for text inputs:** When using controlled text inputs (like `<input>` or `<textarea>`), add `{ sync: true }` to prevent cursor jumping:
+
+```jsx
+const snap = useSnapshot(state, { sync: true });
+<input value={snap.text} onChange={(e) => (state.text = e.target.value)} />;
+```
+
+This forces synchronous updates instead of Valtio's default async batching. See [Valtio issue #270](https://github.com/pmndrs/valtio/issues/270) for details.
 
 ## Features
 
