@@ -1,31 +1,42 @@
 # valtio-y ⚡
 
-### Collaborative State Management
+### Effortless Collaborative State
 
-**Write normal JavaScript, get real-time sync free**
+**Write normal JavaScript. Sync in real-time automatically.**
 
 [![CI](https://img.shields.io/github/actions/workflow/status/valtiojs/valtio-y/ci.yml?branch=main)](https://github.com/valtiojs/valtio-y/actions?query=workflow%3ACI)
 [![npm version](https://img.shields.io/npm/v/valtio-y)](https://www.npmjs.com/package/valtio-y)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/valtio-y)](https://bundlephobia.com/result?p=valtio-y)
 [![npm downloads](https://img.shields.io/npm/dm/valtio-y)](https://www.npmjs.com/package/valtio-y)
-[![Discord](https://img.shields.io/discord/627656437971288081)](https://discord.gg/MrQdmzd)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue)](https://www.typescriptlang.org/)
 
-Two-way sync between [Valtio](https://github.com/pmndrs/valtio) proxies and [Yjs](https://github.com/yjs/yjs) CRDTs. Build collaborative apps for **structured data** (forms, dashboards, boards)—no special APIs, just mutate objects naturally.
+<br />
+<p align="center">
+  <a href="https://valtio-y-stickynotes.agcty.workers.dev/">
+    <img src="https://i.imgur.com/a36KJ2a.gif" alt="Sticky Notes Demo (valtio-y)" width="100%" />
+  </a>
+</p>
+<br />
 
-[Examples](#examples) · [Guides](#guides) · [Discord](https://discord.gg/MrQdmzd)
+**Build multiplayer apps as easily as writing local state.**
+
+valtio-y synchronizes your [Valtio](https://github.com/pmndrs/valtio) state with [Yjs](https://github.com/yjs/yjs) automatically. It solves the difficult edge cases of state-CRDT syncing—like **array moves**, **item replacements**, and **list reordering**—while remaining significantly more performant than naive bindings.
+
+[Examples](#examples) · [Guides](#guides)
 
 ---
 
 ## Why valtio-y?
 
-Building collaborative apps for **structured data** (not text documents, not simple CRUD) is **hard**. You need:
+Most CRDT bindings struggle with the "last 10%" of complexity: correctly handling **array moves** (reordering items without deleting/recreating them), **replacing objects** without breaking references, and maintaining **referential equality** for React renders.
 
-- Automatic conflict resolution when users edit simultaneously
-- Offline support that merges changes correctly when reconnected
-- Network protocols (WebSocket, WebRTC, etc.)
-- State consistency across clients
-- Efficient re-renders without performance issues
+valtio-y is a ground-up rewrite focused on **correctness** and **performance**:
+
+- **Solves Hard Sync Problems**: Handles array moves, replacements, and reordering correctly.
+- **High Performance**: Optimized for bulk operations and deep state trees; significantly faster than other proxy-based solutions.
+- **Production Ready**: Handles the edge cases that usually cause sync divergence in other libraries.
+
+You get automatic conflict resolution, offline support, and efficient re-renders, but with a level of robustness that stands up to complex real-world usage.
 
 **valtio-y handles all of this for you.** Just mutate your state like normal:
 
@@ -33,44 +44,37 @@ Building collaborative apps for **structured data** (not text documents, not sim
 state.todos.push({ text: "Buy milk", done: false });
 state.users[0].name = "Alice";
 state.dashboard.widgets[2].position = { x: 100, y: 200 };
+
+// Move item from index 0 to 2 (handled efficiently)
+const [todo] = state.todos.splice(0, 1);
+state.todos.splice(2, 0, todo);
 ```
 
 It automatically syncs across all connected users with **zero configuration**. No special APIs, no operational transforms to understand, no conflict resolution code to write.
 
-### How It Compares
+### Optimized for Performance
 
-|                       | valtio-y     | Plain Yjs       | Other CRDT libs |
-| --------------------- | ------------ | --------------- | --------------- |
-| Framework Integration | ✓ Native     | Manual setup    | Manual setup    |
-| TypeScript Support    | ✓ Full       | ✓ Full          | ~ Partial       |
-| Learning Curve        | ✓ Low        | ~ Medium        | ✗ High          |
-| Nested Structures     | ✓ Natural    | Manual mapping  | Manual mapping  |
-| Array Operations      | ✓ All native | Y.Array focused | ~ Limited       |
-| Fine-grained Updates  | ✓ Yes        | ✗ No            | ✗ No            |
-| Offline-First         | ✓ Yes        | ✓ Yes           | ~ Varies        |
+valtio-y batches all mutations in a single event loop tick into one Yjs transaction. This means **100 updates result in just 1 network message**.
 
-Built from the ground up with a production-ready architecture, cleaner API (`createYjsProxy` vs manual binding), and battle-tested performance. Based on the original valtio-yjs but completely rewritten for reliability and developer experience.
+It also handles large arrays and deep object trees efficiently, only updating the parts of the React component tree that actually changed.
 
 ### When to Use valtio-y
 
-valtio-y excels in the **sweet spot between text editors and sync engines**: real-time collaborative editing of **structured data** (objects, arrays, nested state) where conflicts must resolve automatically.
+**Perfect for:** Real-time collaborative apps involving structured data like **Kanban boards**, **spreadsheets**, **design tools**, **game state**, and **forms**.
 
-**Best suited for:**
+**Not for:** Collaborative **text editors** (Google Docs style). For rich text, use [Lexical](https://lexical.dev/), [TipTap](https://tiptap.dev/), or [ProseMirror](https://prosemirror.net/) with their native Yjs bindings.
 
-- **Form builders** - Drag-and-drop interfaces, field configuration, visual editors
-- **Kanban/project boards** - Task management, card reordering, status updates
-- **Collaborative spreadsheets** - Data entry, cell updates (not heavy text editing)
-- **Dashboard configurators** - Widget placement, settings, real-time layout adjustments
-- **Design tool data** - Layer properties, element positions, configuration (not text content)
-- **Multiplayer game state** - Player positions, inventory, world state
-- **Data annotation tools** - Labeling, categorization, collaborative markup
-- **Configuration panels** - Settings that multiple users can adjust simultaneously
+### Examples
 
-**Consider other tooling for:**
+See the power of valtio-y in action:
 
-- **Text/document editors** → Use [Lexical](https://lexical.dev/), [TipTap](https://tiptap.dev/), or [ProseMirror](https://prosemirror.net/) with native Yjs integrations. They handle text-specific reconciliation internally.
-- **Apps like Linear/Notion** → Use sync engines (real-time updates without CRDT conflict resolution). Two users simultaneously editing the same Linear issue title or description doesn't need automatic merging—one user's change wins, and they can communicate to resolve it.
-- **Simple CRUD apps** → Plain REST/GraphQL is simpler if you don't need real-time collaboration.
+1. **[Simple App](https://valtio-y-simple.agcty.workers.dev/)** - Objects, arrays, and primitives syncing in real-time.
+2. **[Sticky Notes](https://valtio-y-stickynotes.agcty.workers.dev/)** - Production-ready collaborative board.
+3. **[Whiteboard](https://valtio-y-whiteboard.agcty.workers.dev)** - Drawing, shapes, and multi-user cursors.
+4. **[Todos App](https://valtio-y-todos.agcty.workers.dev)** - Collaborative list management.
+5. **[Minecraft Clone](https://valtio-y-minecraft.agcty.workers.dev)** - Multiplayer game state with 3D graphics.
+
+---
 
 ## Installation
 
@@ -126,22 +130,6 @@ state.todos[0].done = true;
 ```
 
 That's it! State is now synchronized via Yjs. Add a provider to sync across clients.
-
----
-
-## Examples
-
-Live collaborative demos - open in multiple tabs to see real-time sync:
-
-1. **[Simple App](https://valtio-y-simple.agcty.workers.dev/)** - Complete example demonstrating objects, arrays, strings, and numbers with real-time sync. Simple example for beginners.
-
-2. **[Sticky Notes](https://valtio-y-stickynotes.agcty.workers.dev/)** - Cloudflare Durable Object demo showing collaborative sticky notes in production.
-
-3. **[Whiteboard](https://valtio-y-whiteboard.agcty.workers.dev)** - Collaborative whiteboard demo with drawing and shapes.
-
-4. **[Todos App](https://valtio-y-todos.agcty.workers.dev)** - Live collaborative todo app demo.
-
-5. **[Minecraft Clone](https://valtio-y-minecraft.agcty.workers.dev)** - Real-time multiplayer 3D game with Cloudflare Durable Objects sync (Three.js, valtio-y).
 
 ---
 
