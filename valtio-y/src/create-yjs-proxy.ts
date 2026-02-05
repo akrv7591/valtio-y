@@ -139,6 +139,12 @@ export interface CreateYjsProxyOptions<_T> {
    */
   undoManager?: boolean | UndoManagerOptions | Y.UndoManager;
 
+  /** * Array of dot-notation paths to ignore during sync.
+   * Wildcards (*) are supported.
+   * * @example ["nodes.selected", "nodes.data.*.name"]
+   */
+  ignoreKeyPaths?: string[];
+
   logLevel?: LogLevel;
 }
 
@@ -190,11 +196,16 @@ export function createYjsProxy<T extends object>(
   doc: Y.Doc,
   options: CreateYjsProxyOptions<T>,
 ): YjsProxy<T> | YjsProxyWithUndo<T> {
-  const { getRoot } = options;
+  const { getRoot, ignoreKeyPaths } = options;
   const yRoot = getRoot(doc);
 
   // 1. Create the coordinator (fully initialized via constructor injection)
-  const coordinator = new ValtioYjsCoordinator(doc, options.logLevel);
+  const coordinator = new ValtioYjsCoordinator(
+    doc,
+    yRoot,
+    ignoreKeyPaths,
+    options.logLevel,
+  );
   const stateProxy = getOrCreateValtioProxy(coordinator, yRoot, doc);
 
   // 2. Provide developer-driven bootstrap for initial data.

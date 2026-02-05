@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as Y from "yjs";
 import { ValtioYjsCoordinator } from "./coordinator";
 
@@ -6,7 +6,8 @@ describe("ValtioYjsCoordinator", () => {
   describe("Constructor and Logger", () => {
     it("creates coordinator with default settings (logging off)", () => {
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc);
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, []);
       expect(coordinator).toBeInstanceOf(ValtioYjsCoordinator);
       expect(coordinator.state.isReconciling).toBe(false);
       expect(coordinator.logger).toBeDefined();
@@ -18,25 +19,29 @@ describe("ValtioYjsCoordinator", () => {
 
     it("creates coordinator with error level", () => {
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc, "error");
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, [], "error");
       expect(coordinator).toBeInstanceOf(ValtioYjsCoordinator);
     });
 
     it("creates coordinator with warn level", () => {
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc, "warn");
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, [], "warn");
       expect(coordinator).toBeInstanceOf(ValtioYjsCoordinator);
     });
 
     it("creates coordinator with debug level", () => {
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc, "debug");
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, [], "debug");
       expect(coordinator).toBeInstanceOf(ValtioYjsCoordinator);
     });
 
     it("creates coordinator with trace level", () => {
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc, "trace");
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, [], "trace");
       expect(coordinator).toBeInstanceOf(ValtioYjsCoordinator);
     });
 
@@ -51,7 +56,8 @@ describe("ValtioYjsCoordinator", () => {
         .spyOn(console, "error")
         .mockImplementation(() => {});
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc);
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root);
 
       coordinator.logger.trace("trace message");
       coordinator.logger.debug("debug message");
@@ -80,7 +86,8 @@ describe("ValtioYjsCoordinator", () => {
         .spyOn(console, "error")
         .mockImplementation(() => {});
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc, "error");
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, [], "error");
 
       coordinator.logger.trace("trace message");
       coordinator.logger.debug("debug message");
@@ -109,7 +116,8 @@ describe("ValtioYjsCoordinator", () => {
         .spyOn(console, "error")
         .mockImplementation(() => {});
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc, "warn");
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, [], "warn");
 
       coordinator.logger.trace("trace message");
       coordinator.logger.debug("debug message");
@@ -136,7 +144,8 @@ describe("ValtioYjsCoordinator", () => {
         .spyOn(console, "error")
         .mockImplementation(() => {});
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc, "debug");
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, [], "debug");
 
       coordinator.logger.trace("trace message");
       coordinator.logger.debug("debug message", 123);
@@ -165,7 +174,8 @@ describe("ValtioYjsCoordinator", () => {
         .spyOn(console, "error")
         .mockImplementation(() => {});
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc, "trace");
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, [], "trace");
 
       coordinator.logger.trace("trace message");
       coordinator.logger.debug("debug message");
@@ -190,7 +200,8 @@ describe("ValtioYjsCoordinator", () => {
   describe("Cache Management", () => {
     it("initializes with empty caches", () => {
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc);
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, []);
       const yMap = new Y.Map();
       const proxy = {};
 
@@ -200,7 +211,8 @@ describe("ValtioYjsCoordinator", () => {
 
     it("can store and retrieve Y type to proxy mappings", () => {
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc);
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, []);
       const yMap = new Y.Map();
       const proxy = { test: true };
 
@@ -211,7 +223,8 @@ describe("ValtioYjsCoordinator", () => {
 
     it("can store and retrieve proxy to Y type mappings", () => {
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc);
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, []);
       const yMap = new Y.Map();
       const proxy = { test: true };
 
@@ -224,13 +237,15 @@ describe("ValtioYjsCoordinator", () => {
   describe("Reconciling Lock", () => {
     it("starts with isReconciling=false", () => {
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc);
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, []);
       expect(coordinator.state.isReconciling).toBe(false);
     });
 
     it("sets isReconciling=true during lock execution", () => {
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc);
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, []);
       let valueInside = false;
 
       coordinator.withReconcilingLock(() => {
@@ -242,7 +257,8 @@ describe("ValtioYjsCoordinator", () => {
 
     it("resets isReconciling to false after lock execution", () => {
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc);
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, []);
 
       coordinator.withReconcilingLock(() => {
         // do nothing
@@ -253,7 +269,8 @@ describe("ValtioYjsCoordinator", () => {
 
     it("restores previous isReconciling value on nested calls", () => {
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc);
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, []);
       coordinator.state.isReconciling = true;
 
       coordinator.withReconcilingLock(() => {
@@ -265,7 +282,8 @@ describe("ValtioYjsCoordinator", () => {
 
     it("resets isReconciling even if function throws", () => {
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc);
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, []);
 
       expect(() => {
         coordinator.withReconcilingLock(() => {
@@ -280,7 +298,8 @@ describe("ValtioYjsCoordinator", () => {
   describe("Subscription Management", () => {
     it("registerSubscription stores unsubscribe function", () => {
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc);
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, []);
       const yMap = new Y.Map();
       const unsub = vi.fn();
 
@@ -291,7 +310,8 @@ describe("ValtioYjsCoordinator", () => {
 
     it("registerSubscription calls existing unsubscribe if replacing", () => {
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc);
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, []);
       const yMap = new Y.Map();
       const oldUnsub = vi.fn();
       const newUnsub = vi.fn();
@@ -305,7 +325,8 @@ describe("ValtioYjsCoordinator", () => {
 
     it("disposeAll calls all registered unsubscribers", () => {
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc);
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, []);
       const yMap1 = new Y.Map();
       const yMap2 = new Y.Map();
       const unsub1 = vi.fn();
@@ -322,7 +343,8 @@ describe("ValtioYjsCoordinator", () => {
 
     it("disposeAll clears all unsubscribers after calling them", () => {
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc);
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, []);
       const yMap = new Y.Map();
       const unsub = vi.fn();
 
@@ -336,7 +358,8 @@ describe("ValtioYjsCoordinator", () => {
 
     it("disposeAll handles errors in unsubscribe functions gracefully", () => {
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc);
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, []);
       const yMap1 = new Y.Map();
       const yMap2 = new Y.Map();
       const throwingUnsub = vi.fn(() => {
@@ -357,7 +380,8 @@ describe("ValtioYjsCoordinator", () => {
 
     it("disposeAll is idempotent", () => {
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc);
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, []);
       const yMap = new Y.Map();
       const unsub = vi.fn();
 
@@ -374,7 +398,8 @@ describe("ValtioYjsCoordinator", () => {
   describe("Arrays with Delta During Sync", () => {
     it("initially no arrays are marked with delta", () => {
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc);
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, []);
       const yArray = new Y.Array();
 
       expect(coordinator.shouldSkipArrayStructuralReconcile(yArray)).toBe(
@@ -384,7 +409,8 @@ describe("ValtioYjsCoordinator", () => {
 
     it("setArraysWithDeltaDuringSync marks arrays", () => {
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc);
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, []);
       const yArray1 = new Y.Array();
       const yArray2 = new Y.Array();
 
@@ -400,7 +426,8 @@ describe("ValtioYjsCoordinator", () => {
 
     it("clearArraysWithDeltaDuringSync clears all marks", () => {
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc);
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, []);
       const yArray = new Y.Array();
 
       coordinator.setArraysWithDeltaDuringSync([yArray]);
@@ -414,7 +441,8 @@ describe("ValtioYjsCoordinator", () => {
 
     it("only marked arrays return true for shouldSkip", () => {
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc);
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, []);
       const yArray1 = new Y.Array();
       const yArray2 = new Y.Array();
 
@@ -430,7 +458,8 @@ describe("ValtioYjsCoordinator", () => {
 
     it("can handle empty array set", () => {
       const doc = new Y.Doc();
-      const coordinator = new ValtioYjsCoordinator(doc);
+      const root = doc.getMap("root");
+      const coordinator = new ValtioYjsCoordinator(doc, root, []);
       const yArray = new Y.Array();
 
       coordinator.setArraysWithDeltaDuringSync([]);
@@ -447,7 +476,8 @@ describe("ValtioYjsCoordinator", () => {
 
     beforeEach(() => {
       doc = new Y.Doc();
-      coordinator = new ValtioYjsCoordinator(doc);
+      const root = doc.getMap("root");
+      coordinator = new ValtioYjsCoordinator(doc, root, []);
     });
 
     afterEach(() => {

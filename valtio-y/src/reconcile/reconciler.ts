@@ -149,6 +149,12 @@ export function reconcileValtioMap(
         }
 
         if (!inY && inValtio) {
+          if (!coordinator.shouldSync(yMap, key)) {
+            coordinator.logger.trace(
+              `[reconcile] Preserving ignored local key: ${key}`,
+            );
+            continue;
+          }
           coordinator.logger.debug("[DELETE] remove key", key);
           cleanupNestedValue(coordinator, valtioProxy[key]);
           delete valtioProxy[key];

@@ -8,6 +8,20 @@
 // - Lazily create nested controllers when a Y value is another Y type.
 import * as Y from "yjs";
 import * as valtioVanilla from "valtio/vanilla";
+import type { YSharedContainer } from "../core/yjs-types";
+import type { ValtioYjsCoordinator } from "../core/coordinator";
+import { isYMap, isYSharedContainer } from "../core/guards";
+import { planMapOps } from "../planning/map-ops-planner";
+import { planArrayOps } from "../planning/array-ops-planner";
+import { validateDeepForSharedState } from "../core/converter";
+import { safeStringify } from "../utils/logging";
+import type { RawValtioOperation } from "../core/types";
+import {
+  createUpgradeChildCallback,
+  filterMapOperations,
+  rollbackArrayChanges,
+  rollbackMapChanges,
+} from "./controller-helpers";
 
 const { proxy, subscribe } = valtioVanilla;
 
@@ -20,21 +34,6 @@ if (
 ) {
   valtioVanilla.unstable_enableOp(true);
 }
-
-import type { YSharedContainer } from "../core/yjs-types";
-import type { ValtioYjsCoordinator } from "../core/coordinator";
-import { isYSharedContainer, isYMap } from "../core/guards";
-import { planMapOps } from "../planning/map-ops-planner";
-import { planArrayOps } from "../planning/array-ops-planner";
-import { validateDeepForSharedState } from "../core/converter";
-import { safeStringify } from "../utils/logging";
-import type { RawValtioOperation } from "../core/types";
-import {
-  createUpgradeChildCallback,
-  filterMapOperations,
-  rollbackArrayChanges,
-  rollbackMapChanges,
-} from "./controller-helpers";
 
 // Subscribe to a Valtio array proxy and translate top-level index operations
 // into minimal Y.Array operations.
@@ -56,7 +55,23 @@ function attachValtioArraySubscription(
     (ops: unknown[]) => {
       if (coordinator.state.isReconciling) return;
 
-      coordinator.logger.debug("[controller][array] ops", safeStringify(ops));
+      // Filter ignored paths
+      const allowedOps = ops.filter((op) => {
+        // Check if this specific index op is allowed
+        if (Array.isArray(op) && Array.isArray(op[1]) && op[1].length === 1) {
+          const idx = op[1][0]; // the numeric index or string index
+          // Cast string index to number if needed, though validator handles strings
+          return coordinator.shouldSync(yArray, idx);
+        }
+        return true;
+      });
+
+      if (allowedOps.length === 0) return;
+
+      coordinator.logger.debug(
+        "[controller][array] ops",
+        safeStringify(allowedOps),
+      );
 
       // Wrap planning + enqueue in try/catch to rollback local proxy on validation failure
       try {
@@ -67,7 +82,7 @@ function attachValtioArraySubscription(
         const yLength = yArray.length;
 
         const { sets, deletes, replaces } = planArrayOps(
-          ops,
+          allowedOps,
           yLength,
           coordinator,
         );
@@ -173,22 +188,29 @@ function attachValtioMapSubscription(
       // Filter out operations on internal properties
       // 1. Filter out nested Y.js internal property changes (path.length > 1)
       // 2. Filter out valtio-y internal properties (__valtio_yjs_*)
-      const filteredOps = filterMapOperations(ops);
+      const standardFiltered = filterMapOperations(ops);
 
-      if (filteredOps.length === 0) {
-        // All ops were filtered out (all were nested Y.js internal changes)
+      // 2. Filter out ignored KeyPaths
+      const allowedOps = standardFiltered.filter((op) => {
+        const rawOp = op as RawValtioOperation;
+        // path[0] is the key
+        const key = rawOp[1][0];
+        return coordinator.shouldSync(yMap, key);
+      });
+
+      if (allowedOps.length === 0) {
         return;
       }
 
       coordinator.logger.debug(
         "[controller][map] ops (filtered)",
-        safeStringify(filteredOps),
+        safeStringify(allowedOps),
       );
 
       // Wrap planning + enqueue in try/catch to rollback local proxy on validation failure
       try {
         // Phase 1: Planning - categorize operations
-        const { sets, deletes } = planMapOps(filteredOps);
+        const { sets, deletes } = planMapOps(allowedOps);
 
         // Phase 2: Scheduling - enqueue planned operations
         for (const [key, value] of sets) {
@@ -217,7 +239,7 @@ function attachValtioMapSubscription(
         rollbackMapChanges(
           coordinator,
           objProxy,
-          filteredOps as RawValtioOperation[],
+          allowedOps as RawValtioOperation[],
         );
         throw err;
       }

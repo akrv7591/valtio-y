@@ -1,12 +1,12 @@
 import * as Y from "yjs";
 import {
-  SynchronizationState,
   type AnySharedType,
+  SynchronizationState,
 } from "./synchronization-state";
 import { createLogger, type Logger, type LogLevel } from "./logger";
 import {
-  WriteScheduler,
   type ApplyFunctions,
+  WriteScheduler,
 } from "../scheduling/write-scheduler";
 import { applyMapDeletes, applyMapSets } from "../scheduling/map-apply";
 import { applyArrayOperations } from "../scheduling/array-apply";
@@ -16,6 +16,8 @@ import {
 } from "../reconcile/reconciler";
 import { getYDoc } from "./types";
 import type { PostTransactionQueue } from "../scheduling/post-transaction-queue";
+import { PathValidator } from "../utils/path-validator";
+import { type YSharedContainer } from "./yjs-types";
 
 /**
  * Orchestrates all valtio-y components using dependency injection.
@@ -41,11 +43,20 @@ export class ValtioYjsCoordinator {
 
   // Internal components
   private readonly scheduler: WriteScheduler;
+  private readonly pathValidator: PathValidator;
 
-  constructor(doc: Y.Doc, logLevel?: LogLevel) {
+  constructor(
+    doc: Y.Doc,
+    root: YSharedContainer,
+    ignoreKeyPaths: string[] = [],
+    logLevel?: LogLevel,
+  ) {
     // Create pure components with no dependencies
     this.state = new SynchronizationState();
     this.logger = createLogger(logLevel ?? "off");
+
+    // Initialize Validator
+    this.pathValidator = new PathValidator(root, ignoreKeyPaths);
 
     // Wire up apply functions with proper dependencies via closures
     // This eliminates the need for setter injection
@@ -70,6 +81,22 @@ export class ValtioYjsCoordinator {
     // Create scheduler with all dependencies (constructor injection)
     // No setter injection needed - fully initialized immediately
     this.scheduler = new WriteScheduler(doc, this.logger, applyFunctions);
+  }
+
+  /**
+   * Checks if a specific key/index change should be synced to Yjs
+   * or ignored based on the ignoreKeyPaths configuration.
+   */
+  shouldSync(container: YSharedContainer, key: string | number): boolean {
+    //
+    const should = this.pathValidator.shouldSync(container, key);
+    if (!should) {
+      this.logger.debug(`[ignore] Skipping local change at path`, {
+        containerType: container.constructor.name,
+        key,
+      });
+    }
+    return should;
   }
 
   // ===== Coordination Methods =====
